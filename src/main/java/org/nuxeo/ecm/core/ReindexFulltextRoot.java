@@ -21,6 +21,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +38,6 @@ import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.AbstractSession;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
-import org.nuxeo.ecm.core.api.DocumentException;
-import org.nuxeo.ecm.core.api.DocumentModel;
-import org.nuxeo.ecm.core.api.DocumentRef;
-import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.TransactionalCoreSessionWrapper;
@@ -48,12 +45,14 @@ import org.nuxeo.ecm.core.event.Event;
 import org.nuxeo.ecm.core.event.EventContext;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.event.impl.EventContextImpl;
+import org.nuxeo.ecm.core.query.QueryFilter;
 import org.nuxeo.ecm.core.query.sql.NXQL;
 import org.nuxeo.ecm.core.storage.sql.Model;
 import org.nuxeo.ecm.core.storage.sql.ModelFulltext;
+import org.nuxeo.ecm.core.storage.sql.Node;
 import org.nuxeo.ecm.core.storage.sql.Session;
+import org.nuxeo.ecm.core.storage.sql.SimpleProperty;
 import org.nuxeo.ecm.core.storage.sql.coremodel.BinaryTextListener;
-import org.nuxeo.ecm.core.storage.sql.coremodel.SQLDocument;
 import org.nuxeo.ecm.core.storage.sql.coremodel.SQLSession;
 import org.nuxeo.ecm.webengine.jaxrs.session.SessionFactory;
 import org.nuxeo.runtime.api.Framework;
@@ -69,12 +68,6 @@ public class ReindexFulltextRoot {
 
     public static Log log = LogFactory.getLog(ReindexFulltextRoot.class);
 
-    // org.nuxeo.ecm.platform.dublincore.listener.DublinCoreListener.DISABLE_DUBLINCORE_LISTENER
-    protected static final String DISABLE_DUBLINCORE_LISTENER = "disableDublinCoreListener";
-
-    // org.nuxeo.ecm.platform.ec.notification.NotificationConstants.DISABLE_NOTIFICATION_SERVICE
-    protected static final String DISABLE_NOTIFICATION_SERVICE = "disableNotificationService";
-
     protected static final String DC_TITLE = "dc:title";
 
     protected static final int DEFAULT_BATCH_SIZE = 100;
@@ -82,7 +75,9 @@ public class ReindexFulltextRoot {
     @Context
     protected HttpServletRequest request;
 
-    protected CoreSession session;
+    protected CoreSession coreSession;
+
+    protected Session session;
 
     protected ModelFulltext fulltextInfo;
 
@@ -97,6 +92,13 @@ public class ReindexFulltextRoot {
         }
     }
 
+    @GET
+    public String get(@QueryParam("batchSize") int batchSize,
+            @QueryParam("batch") int batch) throws Exception {
+        coreSession = SessionFactory.getSession(request);
+        return reindexFulltext(batchSize, batch);
+    }
+
     /**
      * Launches a fulltext reindexing of the database.
      *
@@ -105,11 +107,8 @@ public class ReindexFulltextRoot {
      *            batches; starts at 1
      * @return when done, ok + the total number of docs
      */
-    @GET
-    public String reindexFulltext(@QueryParam("batchSize") int batchSize,
-            @QueryParam("batch") int batch) throws Exception {
-        session = SessionFactory.getSession(request);
-        Principal principal = session.getPrincipal();
+    public String reindexFulltext(int batchSize, int batch) throws Exception {
+        Principal principal = coreSession.getPrincipal();
         if (!(principal instanceof NuxeoPrincipal)) {
             return "unauthorized";
         }
@@ -117,7 +116,6 @@ public class ReindexFulltextRoot {
         if (!nuxeoPrincipal.isAdministrator()) {
             return "unauthorized";
         }
-        fulltextInfo = getFulltextInfo();
 
         log("Reindexing starting");
         if (batchSize <= 0) {
@@ -158,7 +156,9 @@ public class ReindexFulltextRoot {
                     batchInfos.get(0).id);
             try {
                 doBatch(batchInfos);
-            } catch (ClientException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
                 log.error("Error processing batch " + i + 1, e);
                 errs++;
             }
@@ -176,32 +176,36 @@ public class ReindexFulltextRoot {
         log.warn(String.format(format, args));
     }
 
-    protected ModelFulltext getFulltextInfo() throws Exception {
-        CoreSession coreSession;
-        if (Proxy.isProxyClass(session.getClass())) {
-            TransactionalCoreSessionWrapper w = (TransactionalCoreSessionWrapper) Proxy.getInvocationHandler(session);
+    /**
+     * This has to be called once the transaction has been started.
+     */
+    protected void getLowLevelSession() throws Exception {
+        CoreSession cs;
+        if (Proxy.isProxyClass(coreSession.getClass())) {
+            TransactionalCoreSessionWrapper w = (TransactionalCoreSessionWrapper) Proxy.getInvocationHandler(coreSession);
             Field f1 = TransactionalCoreSessionWrapper.class.getDeclaredField("session");
             f1.setAccessible(true);
-            coreSession = (CoreSession) f1.get(w);
+            cs = (CoreSession) f1.get(w);
         } else {
-            coreSession = session;
+            cs = coreSession;
         }
 
-        SQLSession s = (SQLSession) ((AbstractSession) coreSession).getSession();
+        SQLSession s = (SQLSession) ((AbstractSession) cs).getSession();
         Field f2 = SQLSession.class.getDeclaredField("session");
         f2.setAccessible(true);
-        Session ss = (Session) f2.get(s);
-        Model model = ss.getModel();
-        return model.getFulltextInfo();
+        session = (Session) f2.get(s);
+        fulltextInfo = session.getModel().getFulltextInfo();
     }
 
-    protected List<Info> getInfos() throws ClientException {
+    protected List<Info> getInfos() throws Exception {
+        getLowLevelSession();
         List<Info> infos = new ArrayList<Info>();
         String query = "SELECT ecm:uuid, ecm:primaryType FROM Document"
                 + " WHERE ecm:isProxy = 0"
                 + " AND ecm:currentLifeCycleState <> 'deleted'"
                 + " ORDER BY ecm:uuid";
-        IterableQueryResult it = session.queryAndFetch(query, NXQL.NXQL);
+        IterableQueryResult it = session.queryAndFetch(query, NXQL.NXQL,
+                QueryFilter.EMPTY);
         try {
             for (Map<String, Serializable> map : it) {
                 String id = (String) map.get(NXQL.ECM_UUID);
@@ -214,103 +218,108 @@ public class ReindexFulltextRoot {
         return infos;
     }
 
-    protected void doBatch(List<Info> infos) throws ClientException {
-        Set<String> asyncIds;
+    protected void doBatch(List<Info> infos) throws Exception {
+        getLowLevelSession(); // for fulltextInfo
+        List<Serializable> ids = new ArrayList<Serializable>(infos.size());
+        Set<Serializable> asyncIds = new HashSet<Serializable>();
+        for (Info info : infos) {
+            ids.add(info.id);
+            if (fulltextInfo.isFulltextIndexable(info.type)) {
+                asyncIds.add(info.id);
+            }
+        }
+
+        boolean tx;
         boolean ok;
 
         // transaction for the sync batch
-        TransactionHelper.startTransaction();
+        tx = TransactionHelper.startTransaction();
         ok = false;
         try {
-            asyncIds = runSyncBatch(infos);
+            runSyncBatch(ids, asyncIds);
             ok = true;
         } finally {
-            if (!ok) {
-                TransactionHelper.setTransactionRollbackOnly();
-                log.error("Rolling back sync");
+            if (tx) {
+                if (!ok) {
+                    TransactionHelper.setTransactionRollbackOnly();
+                    log.error("Rolling back sync");
+                }
+                TransactionHelper.commitOrRollbackTransaction();
             }
-            TransactionHelper.commitOrRollbackTransaction();
         }
 
         // transaction for the async batch firing (needs session)
-        TransactionHelper.startTransaction();
+        tx = TransactionHelper.startTransaction();
         ok = false;
         try {
             runAsyncBatch(asyncIds);
             ok = true;
         } finally {
-            if (!ok) {
-                TransactionHelper.setTransactionRollbackOnly();
-                log.error("Rolling back async fire");
+            if (tx) {
+                if (!ok) {
+                    TransactionHelper.setTransactionRollbackOnly();
+                    log.error("Rolling back async fire");
+                }
+                TransactionHelper.commitOrRollbackTransaction();
             }
-            TransactionHelper.commitOrRollbackTransaction();
         }
+
+        // wait for async completion after transaction commit
+        Framework.getLocalService(EventService.class).waitForAsyncCompletion();
     }
 
-    protected Set<String> runSyncBatch(List<Info> infos) throws ClientException {
-        List<DocumentRef> refs = new ArrayList<DocumentRef>(infos.size());
-        Set<String> asyncIds = new HashSet<String>();
-        for (Info info : infos) {
-            String id = info.id;
-            IdRef ref = new IdRef(id);
-            refs.add(ref);
+    /*
+     * Do this at the low-level session level because we may have to modify
+     * things like versions which aren't usually modifiable, and it's also good
+     * to bypass all listeners.
+     */
+    protected void runSyncBatch(List<Serializable> ids,
+            Set<Serializable> asyncIds) throws Exception {
+        getLowLevelSession();
 
-            // mark async indexing to do
-            if (!fulltextInfo.isFulltextIndexable(info.type)) {
-                continue;
+        session.getNodesByIds(ids); // batch fetch
+
+        Map<Serializable, String> titles = new HashMap<Serializable, String>();
+        for (Serializable id : ids) {
+            Node node = session.getNodeById(id);
+            if (asyncIds.contains(id)) {
+                node.setSimpleProperty(Model.FULLTEXT_JOBID_PROP, id);
             }
+            SimpleProperty prop;
             try {
-                session.setDocumentSystemProp(ref,
-                        SQLDocument.FULLTEXT_JOBID_SYS_PROP, id);
-            } catch (DocumentException e) {
-                log.error(e);
+                prop = node.getSimpleProperty(DC_TITLE);
+            } catch (IllegalArgumentException e) {
                 continue;
             }
-            asyncIds.add(id);
-        }
-        DocumentModel[] docs = session.getDocuments(
-                refs.toArray(new DocumentRef[0])).toArray(new DocumentModel[0]);
-
-        for (int i = 0; i < docs.length; i++) {
-            DocumentModel doc = docs[i];
-            String title = doc.getTitle();
-            title += " "; // add space
-            doc.setPropertyValue(DC_TITLE, title);
-            docs[i] = saveDocument(doc);
+            String title = (String) prop.getValue();
+            titles.put(id, title);
+            prop.setValue(title + " ");
         }
         session.save();
 
-        for (int i = 0; i < docs.length; i++) {
-            DocumentModel doc = docs[i];
-            String title = doc.getTitle();
-            if (title.endsWith(" ")) {
-                title = title.substring(0, title.length() - 1); // remove space
+        for (Serializable id : ids) {
+            Node node = session.getNodeById(id);
+            SimpleProperty prop;
+            try {
+                prop = node.getSimpleProperty(DC_TITLE);
+            } catch (IllegalArgumentException e) {
+                continue;
             }
-            doc.setPropertyValue(DC_TITLE, title);
-            docs[i] = saveDocument(doc);
+            prop.setValue(titles.get(id));
         }
         session.save();
-
-        return asyncIds;
     }
 
-    protected DocumentModel saveDocument(DocumentModel doc)
+    protected void runAsyncBatch(Set<Serializable> asyncIds)
             throws ClientException {
-        doc.putContextData(DISABLE_NOTIFICATION_SERVICE, Boolean.TRUE);
-        doc.putContextData(DISABLE_DUBLINCORE_LISTENER, Boolean.TRUE);
-        return session.saveDocument(doc);
-    }
-
-    protected void runAsyncBatch(Set<String> asyncIds) throws ClientException {
         if (asyncIds.isEmpty()) {
             return;
         }
         EventContext eventContext = new EventContextImpl(asyncIds, fulltextInfo);
-        eventContext.setRepositoryName(session.getRepositoryName());
+        eventContext.setRepositoryName(coreSession.getRepositoryName());
         Event event = eventContext.newEvent(BinaryTextListener.EVENT_NAME);
         EventService eventService = Framework.getLocalService(EventService.class);
         eventService.fireEvent(event);
-        eventService.waitForAsyncCompletion();
     }
 
 }
