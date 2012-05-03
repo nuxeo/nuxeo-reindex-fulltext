@@ -1,0 +1,24 @@
+.checkstyle
+.metadata
+.mylar
+.pmd
+
+# common stuff
+.classpath
+.project
+.settings
+.idea
+bin
+target
+*~
+*~bak
+*-bak
+*.bak
+*-new
+*.rej
+*.orig
+.DS_Store
+*.iml
+*.ipr
+*.iws
+*.gpd.*
