@@ -3,6 +3,15 @@
 This is a simple plugin used to launch a full reindexing of the fulltext
 of a Nuxeo repository.
 
+Reindexing the fulltext is useful/needed if:
+
+- you have changed your database fulltext analyzer configuration,
+for instance from English to French,
+- you have changed the available converters, for instance so that
+new kinds of attached files can be converted to text,
+- you have upgraded to Nuxeo 5.5 with PostgreSQL and followed
+[this migration procedure](https://jira.nuxeo.com/browse/NXP-5689).
+
 ## Usage
 
     http://localhost:8080/nuxeo/site/reindexFulltext
