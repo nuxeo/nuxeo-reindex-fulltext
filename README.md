@@ -7,6 +7,8 @@ Reindexing the fulltext is useful/needed if:
 
 - you have changed your database fulltext analyzer configuration,
 for instance from English to French,
+- you previously did document modifications with fulltext disabled,
+for instance during a mass import,
 - you have changed the available converters, for instance so that
 new kinds of attached files can be converted to text,
 - you have upgraded to Nuxeo 5.5 with PostgreSQL and followed
