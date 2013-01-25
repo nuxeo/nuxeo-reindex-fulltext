@@ -41,19 +41,18 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.TransactionalCoreSessionWrapper;
-import org.nuxeo.ecm.core.event.Event;
-import org.nuxeo.ecm.core.event.EventContext;
 import org.nuxeo.ecm.core.event.EventService;
-import org.nuxeo.ecm.core.event.impl.EventContextImpl;
 import org.nuxeo.ecm.core.query.QueryFilter;
 import org.nuxeo.ecm.core.query.sql.NXQL;
+import org.nuxeo.ecm.core.storage.sql.FulltextExtractorWork;
 import org.nuxeo.ecm.core.storage.sql.Model;
 import org.nuxeo.ecm.core.storage.sql.ModelFulltext;
 import org.nuxeo.ecm.core.storage.sql.Node;
 import org.nuxeo.ecm.core.storage.sql.Session;
 import org.nuxeo.ecm.core.storage.sql.SimpleProperty;
-import org.nuxeo.ecm.core.storage.sql.coremodel.BinaryTextListener;
 import org.nuxeo.ecm.core.storage.sql.coremodel.SQLSession;
+import org.nuxeo.ecm.core.work.api.Work;
+import org.nuxeo.ecm.core.work.api.WorkManager;
 import org.nuxeo.ecm.webengine.jaxrs.session.SessionFactory;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.transaction.TransactionHelper;
@@ -315,11 +314,10 @@ public class ReindexFulltextRoot {
         if (asyncIds.isEmpty()) {
             return;
         }
-        EventContext eventContext = new EventContextImpl(asyncIds, fulltextInfo);
-        eventContext.setRepositoryName(coreSession.getRepositoryName());
-        Event event = eventContext.newEvent(BinaryTextListener.EVENT_NAME);
-        EventService eventService = Framework.getLocalService(EventService.class);
-        eventService.fireEvent(event);
+        Work work = new FulltextExtractorWork(coreSession.getRepositoryName(),
+                asyncIds);
+        // schedule work post-commit
+        Framework.getLocalService(WorkManager.class).schedule(work, true);
     }
 
 }
