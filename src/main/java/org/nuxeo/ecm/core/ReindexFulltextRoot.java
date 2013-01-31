@@ -81,11 +81,11 @@ public class ReindexFulltextRoot {
     protected ModelFulltext fulltextInfo;
 
     protected static class Info {
-        public final String id;
+        public final Serializable id;
 
         public final String type;
 
-        public Info(String id, String type) {
+        public Info(Serializable id, String type) {
             this.id = id;
             this.type = type;
         }
@@ -207,7 +207,7 @@ public class ReindexFulltextRoot {
                 QueryFilter.EMPTY);
         try {
             for (Map<String, Serializable> map : it) {
-                String id = (String) map.get(NXQL.ECM_UUID);
+                Serializable id = map.get(NXQL.ECM_UUID);
                 String type = (String) map.get(NXQL.ECM_PRIMARYTYPE);
                 infos.add(new Info(id, type));
             }
@@ -220,11 +220,12 @@ public class ReindexFulltextRoot {
     protected void doBatch(List<Info> infos) throws Exception {
         getLowLevelSession(); // for fulltextInfo
         List<Serializable> ids = new ArrayList<Serializable>(infos.size());
-        Set<Serializable> asyncIds = new HashSet<Serializable>();
+        Set<String> asyncIds = new HashSet<String>();
+        Model model = session.getModel();
         for (Info info : infos) {
             ids.add(info.id);
             if (fulltextInfo.isFulltextIndexable(info.type)) {
-                asyncIds.add(info.id);
+                asyncIds.add(model.idToString(info.id));
             }
         }
 
@@ -272,8 +273,8 @@ public class ReindexFulltextRoot {
      * things like versions which aren't usually modifiable, and it's also good
      * to bypass all listeners.
      */
-    protected void runSyncBatch(List<Serializable> ids,
-            Set<Serializable> asyncIds) throws Exception {
+    protected void runSyncBatch(List<Serializable> ids, Set<String> asyncIds)
+            throws Exception {
         getLowLevelSession();
 
         session.getNodesByIds(ids); // batch fetch
@@ -309,7 +310,7 @@ public class ReindexFulltextRoot {
         session.save();
     }
 
-    protected void runAsyncBatch(Set<Serializable> asyncIds)
+    protected void runAsyncBatch(Set<String> asyncIds)
             throws ClientException {
         if (asyncIds.isEmpty()) {
             return;
