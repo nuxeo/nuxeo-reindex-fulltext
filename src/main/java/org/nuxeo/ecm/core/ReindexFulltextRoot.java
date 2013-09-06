@@ -53,6 +53,7 @@ import org.nuxeo.ecm.core.storage.sql.SimpleProperty;
 import org.nuxeo.ecm.core.storage.sql.coremodel.SQLSession;
 import org.nuxeo.ecm.core.work.api.Work;
 import org.nuxeo.ecm.core.work.api.WorkManager;
+import org.nuxeo.ecm.core.work.api.WorkManager.Scheduling;
 import org.nuxeo.ecm.webengine.jaxrs.session.SessionFactory;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.transaction.TransactionHelper;
@@ -248,21 +249,7 @@ public class ReindexFulltextRoot {
             }
         }
 
-        // transaction for the async batch firing (needs session)
-        tx = TransactionHelper.startTransaction();
-        ok = false;
-        try {
-            runAsyncBatch(asyncIds);
-            ok = true;
-        } finally {
-            if (tx) {
-                if (!ok) {
-                    TransactionHelper.setTransactionRollbackOnly();
-                    log.error("Rolling back async fire");
-                }
-                TransactionHelper.commitOrRollbackTransaction();
-            }
-        }
+        runAsyncBatch(asyncIds);
 
         // wait for async completion after transaction commit
         Framework.getLocalService(EventService.class).waitForAsyncCompletion();
@@ -315,10 +302,13 @@ public class ReindexFulltextRoot {
         if (asyncIds.isEmpty()) {
             return;
         }
-        Work work = new FulltextExtractorWork(coreSession.getRepositoryName(),
-                asyncIds);
-        // schedule work post-commit
-        Framework.getLocalService(WorkManager.class).schedule(work, true);
+        String repositoryName = coreSession.getRepositoryName();
+        WorkManager workManager = Framework.getLocalService(WorkManager.class);
+        for (String id : asyncIds) {
+            Work work = new FulltextExtractorWork(repositoryName, id);
+            // schedule immediately, we're outside a transaction
+            workManager.schedule(work, Scheduling.IF_NOT_SCHEDULED, false);
+        }
     }
 
 }
