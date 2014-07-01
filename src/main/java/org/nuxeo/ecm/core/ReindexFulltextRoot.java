@@ -44,9 +44,9 @@ import org.nuxeo.ecm.core.api.TransactionalCoreSessionWrapper;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.query.QueryFilter;
 import org.nuxeo.ecm.core.query.sql.NXQL;
+import org.nuxeo.ecm.core.storage.FulltextConfiguration;
 import org.nuxeo.ecm.core.storage.sql.FulltextExtractorWork;
 import org.nuxeo.ecm.core.storage.sql.Model;
-import org.nuxeo.ecm.core.storage.sql.ModelFulltext;
 import org.nuxeo.ecm.core.storage.sql.Node;
 import org.nuxeo.ecm.core.storage.sql.Session;
 import org.nuxeo.ecm.core.storage.sql.SimpleProperty;
@@ -79,7 +79,7 @@ public class ReindexFulltextRoot {
 
     protected Session session;
 
-    protected ModelFulltext fulltextInfo;
+    protected FulltextConfiguration fulltextConfiguration;
 
     protected static class Info {
         public final Serializable id;
@@ -194,7 +194,7 @@ public class ReindexFulltextRoot {
         Field f2 = SQLSession.class.getDeclaredField("session");
         f2.setAccessible(true);
         session = (Session) f2.get(s);
-        fulltextInfo = session.getModel().getFulltextInfo();
+        fulltextConfiguration = session.getModel().getFulltextConfiguration();
     }
 
     protected List<Info> getInfos() throws Exception {
@@ -225,7 +225,7 @@ public class ReindexFulltextRoot {
         Model model = session.getModel();
         for (Info info : infos) {
             ids.add(info.id);
-            if (fulltextInfo.isFulltextIndexable(info.type)) {
+            if (fulltextConfiguration.isFulltextIndexable(info.type)) {
                 asyncIds.add(model.idToString(info.id));
             }
         }
