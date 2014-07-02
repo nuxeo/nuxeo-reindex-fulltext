@@ -45,11 +45,11 @@ import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.query.QueryFilter;
 import org.nuxeo.ecm.core.query.sql.NXQL;
 import org.nuxeo.ecm.core.storage.FulltextConfiguration;
-import org.nuxeo.ecm.core.storage.sql.FulltextExtractorWork;
 import org.nuxeo.ecm.core.storage.sql.Model;
 import org.nuxeo.ecm.core.storage.sql.Node;
 import org.nuxeo.ecm.core.storage.sql.Session;
 import org.nuxeo.ecm.core.storage.sql.SimpleProperty;
+import org.nuxeo.ecm.core.storage.sql.coremodel.SQLFulltextExtractorWork;
 import org.nuxeo.ecm.core.storage.sql.coremodel.SQLSession;
 import org.nuxeo.ecm.core.work.api.Work;
 import org.nuxeo.ecm.core.work.api.WorkManager;
@@ -305,7 +305,7 @@ public class ReindexFulltextRoot {
         String repositoryName = coreSession.getRepositoryName();
         WorkManager workManager = Framework.getLocalService(WorkManager.class);
         for (String id : asyncIds) {
-            Work work = new FulltextExtractorWork(repositoryName, id);
+            Work work = new SQLFulltextExtractorWork(repositoryName, id);
             // schedule immediately, we're outside a transaction
             workManager.schedule(work, Scheduling.IF_NOT_SCHEDULED, false);
         }
