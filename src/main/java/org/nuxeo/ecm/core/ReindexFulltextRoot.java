@@ -219,6 +219,12 @@ public class ReindexFulltextRoot {
     }
 
     protected void doBatch(List<Info> infos) throws Exception {
+        boolean tx;
+        boolean ok;
+
+        // transaction for the sync batch
+        tx = TransactionHelper.startTransaction();
+
         getLowLevelSession(); // for fulltextInfo
         List<Serializable> ids = new ArrayList<Serializable>(infos.size());
         Set<String> asyncIds = new HashSet<String>();
@@ -229,12 +235,6 @@ public class ReindexFulltextRoot {
                 asyncIds.add(model.idToString(info.id));
             }
         }
-
-        boolean tx;
-        boolean ok;
-
-        // transaction for the sync batch
-        tx = TransactionHelper.startTransaction();
         ok = false;
         try {
             runSyncBatch(ids, asyncIds);
