@@ -18,7 +18,6 @@ package org.nuxeo.ecm.core;
 
 import java.io.Serializable;
 import java.lang.reflect.Field;
-import java.lang.reflect.Proxy;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,7 +39,6 @@ import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
-import org.nuxeo.ecm.core.api.TransactionalCoreSessionWrapper;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.query.QueryFilter;
 import org.nuxeo.ecm.core.query.sql.NXQL;
@@ -180,17 +178,7 @@ public class ReindexFulltextRoot {
      * This has to be called once the transaction has been started.
      */
     protected void getLowLevelSession() throws Exception {
-        CoreSession cs;
-        if (Proxy.isProxyClass(coreSession.getClass())) {
-            TransactionalCoreSessionWrapper w = (TransactionalCoreSessionWrapper) Proxy.getInvocationHandler(coreSession);
-            Field f1 = TransactionalCoreSessionWrapper.class.getDeclaredField("session");
-            f1.setAccessible(true);
-            cs = (CoreSession) f1.get(w);
-        } else {
-            cs = coreSession;
-        }
-
-        SQLSession s = (SQLSession) ((AbstractSession) cs).getSession();
+        SQLSession s = (SQLSession) ((AbstractSession) coreSession).getSession();
         Field f2 = SQLSession.class.getDeclaredField("session");
         f2.setAccessible(true);
         session = (Session) f2.get(s);
