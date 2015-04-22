@@ -18,36 +18,29 @@ package org.nuxeo.ecm.core;
 
 import static org.junit.Assert.assertEquals;
 
-import org.junit.After;
-import org.junit.Before;
+import javax.inject.Inject;
+
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.VersioningOption;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
-import org.nuxeo.ecm.core.storage.sql.TXSQLRepositoryTestCase;
-import org.nuxeo.ecm.platform.usermanager.NuxeoPrincipalImpl;
+import org.nuxeo.ecm.core.test.CoreFeature;
+import org.nuxeo.ecm.core.test.TransactionalFeature;
+import org.nuxeo.ecm.core.test.annotations.Granularity;
+import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
+import org.nuxeo.runtime.test.runner.Features;
+import org.nuxeo.runtime.test.runner.FeaturesRunner;
 
-public class TestReindexFulltext extends TXSQLRepositoryTestCase {
+@RunWith(FeaturesRunner.class)
+@Features({ TransactionalFeature.class, CoreFeature.class })
+@RepositoryConfig(cleanup = Granularity.METHOD)
+public class TestReindexFulltext {
 
-    @Override
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-        // for user schema
-        deployBundle("org.nuxeo.ecm.directory.types.contrib");
-        // reopen session with admin user
-        closeSession();
-        NuxeoPrincipalImpl admin = new NuxeoPrincipalImpl("Administrator",
-                false, true);
-        session = openSessionAs(admin);
-    }
-
-    @Override
-    @After
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
+    @Inject
+    protected CoreSession session;
 
     @Test
     public void testReindexFulltext() throws Exception {
@@ -56,15 +49,13 @@ public class TestReindexFulltext extends TXSQLRepositoryTestCase {
         file = session.createDocument(file);
 
         // create a version
-        DocumentRef ver = session.checkIn(file.getRef(),
-                VersioningOption.MINOR, null);
+        DocumentRef ver = session.checkIn(file.getRef(), VersioningOption.MINOR, null);
 
         // create a proxy (not reindexed)
         session.createProxy(ver, session.getRootDocument().getRef());
 
         // create an unfiled doc
-        DocumentModel file2 = new DocumentModelImpl((String) null, "file2",
-                "File");
+        DocumentModel file2 = new DocumentModelImpl((String) null, "file2", "File");
         session.createDocument(file2);
 
         session.save();
