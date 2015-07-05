@@ -286,7 +286,7 @@ public class ReindexFulltextRoot {
     }
 
     protected void runAsyncBatch(Set<String> asyncIds)
-            throws ClientException {
+            {
         if (asyncIds.isEmpty()) {
             return;
         }
