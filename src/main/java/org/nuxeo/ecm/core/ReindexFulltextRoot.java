@@ -35,9 +35,9 @@ import javax.ws.rs.core.Context;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.AbstractSession;
-import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
+import org.nuxeo.ecm.core.api.NuxeoException;
 import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.query.QueryFilter;
@@ -91,8 +91,7 @@ public class ReindexFulltextRoot {
     }
 
     @GET
-    public String get(@QueryParam("batchSize") int batchSize,
-            @QueryParam("batch") int batch) throws Exception {
+    public String get(@QueryParam("batchSize") int batchSize, @QueryParam("batch") int batch) {
         coreSession = SessionFactory.getSession(request);
         return reindexFulltext(batchSize, batch);
     }
@@ -105,7 +104,7 @@ public class ReindexFulltextRoot {
      *            batches; starts at 1
      * @return when done, ok + the total number of docs
      */
-    public String reindexFulltext(int batchSize, int batch) throws Exception {
+    public String reindexFulltext(int batchSize, int batch) {
         Principal principal = coreSession.getPrincipal();
         if (!(principal instanceof NuxeoPrincipal)) {
             return "unauthorized";
@@ -154,9 +153,7 @@ public class ReindexFulltextRoot {
                     batchInfos.get(0).id);
             try {
                 doBatch(batchInfos);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (Exception e) {
+            } catch (NuxeoException e) {
                 log.error("Error processing batch " + i + 1, e);
                 errs++;
             }
@@ -177,15 +174,19 @@ public class ReindexFulltextRoot {
     /**
      * This has to be called once the transaction has been started.
      */
-    protected void getLowLevelSession() throws Exception {
-        SQLSession s = (SQLSession) ((AbstractSession) coreSession).getSession();
-        Field f2 = SQLSession.class.getDeclaredField("session");
-        f2.setAccessible(true);
-        session = (Session) f2.get(s);
-        fulltextConfiguration = session.getModel().getFulltextConfiguration();
+    protected void getLowLevelSession() {
+        try {
+            SQLSession s = (SQLSession) ((AbstractSession) coreSession).getSession();
+            Field f2 = SQLSession.class.getDeclaredField("session");
+            f2.setAccessible(true);
+            session = (Session) f2.get(s);
+            fulltextConfiguration = session.getModel().getFulltextConfiguration();
+        } catch (ReflectiveOperationException e) {
+            throw new NuxeoException(e);
+        }
     }
 
-    protected List<Info> getInfos() throws Exception {
+    protected List<Info> getInfos() {
         getLowLevelSession();
         List<Info> infos = new ArrayList<Info>();
         String query = "SELECT ecm:uuid, ecm:primaryType FROM Document"
@@ -206,7 +207,7 @@ public class ReindexFulltextRoot {
         return infos;
     }
 
-    protected void doBatch(List<Info> infos) throws Exception {
+    protected void doBatch(List<Info> infos) {
         boolean tx;
         boolean ok;
 
@@ -248,8 +249,7 @@ public class ReindexFulltextRoot {
      * things like versions which aren't usually modifiable, and it's also good
      * to bypass all listeners.
      */
-    protected void runSyncBatch(List<Serializable> ids, Set<String> asyncIds)
-            throws Exception {
+    protected void runSyncBatch(List<Serializable> ids, Set<String> asyncIds) {
         getLowLevelSession();
 
         session.getNodesByIds(ids); // batch fetch
