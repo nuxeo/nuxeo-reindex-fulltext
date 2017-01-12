@@ -259,6 +259,10 @@ public class ReindexFulltextRoot {
         Map<Serializable, String> titles = new HashMap<Serializable, String>();
         for (Serializable id : ids) {
             Node node = session.getNodeById(id);
+            if (node == null) {
+                log.debug("Skipping missing node: " + id);
+                continue;
+            }
             if (asyncIds.contains(id)) {
                 node.setSimpleProperty(Model.FULLTEXT_JOBID_PROP, id);
             }
