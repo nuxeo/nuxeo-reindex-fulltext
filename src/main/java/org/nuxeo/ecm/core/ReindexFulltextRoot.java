@@ -254,15 +254,11 @@ public class ReindexFulltextRoot {
     protected void runSyncBatch(List<Serializable> ids, Set<String> asyncIds) {
         getLowLevelSession();
 
-        session.getNodesByIds(ids); // batch fetch
+        List<Node> nodes = session.getNodesByIds(ids); // batch fetch
 
         Map<Serializable, String> titles = new HashMap<Serializable, String>();
-        for (Serializable id : ids) {
-            Node node = session.getNodeById(id);
-            if (node == null) {
-                log.debug("Skipping missing node: " + id);
-                continue;
-            }
+        for (Node node : nodes) {
+            Serializable id = node.getId();
             if (asyncIds.contains(id)) {
                 node.setSimpleProperty(Model.FULLTEXT_JOBID_PROP, id);
             }
@@ -278,21 +274,20 @@ public class ReindexFulltextRoot {
         }
         session.save();
 
-        for (Serializable id : ids) {
-            Node node = session.getNodeById(id);
+        for (Node node : nodes) {
             SimpleProperty prop;
             try {
                 prop = node.getSimpleProperty(DC_TITLE);
             } catch (IllegalArgumentException e) {
                 continue;
             }
+            Serializable id = node.getId();
             prop.setValue(titles.get(id));
         }
         session.save();
     }
 
-    protected void runAsyncBatch(Set<String> asyncIds)
-            {
+    protected void runAsyncBatch(Set<String> asyncIds) {
         if (asyncIds.isEmpty()) {
             return;
         }
