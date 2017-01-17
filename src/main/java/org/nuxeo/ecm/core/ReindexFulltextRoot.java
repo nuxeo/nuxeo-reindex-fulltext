@@ -280,6 +280,9 @@ public class ReindexFulltextRoot {
 
         for (Serializable id : ids) {
             Node node = session.getNodeById(id);
+            if (node == null) {
+                continue;
+            }
             SimpleProperty prop;
             try {
                 prop = node.getSimpleProperty(DC_TITLE);
