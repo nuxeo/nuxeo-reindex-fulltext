@@ -193,7 +193,7 @@ public class ReindexFulltextRoot {
         List<Info> infos = new ArrayList<Info>();
         String query = "SELECT ecm:uuid, ecm:primaryType FROM Document"
                 + " WHERE ecm:isProxy = 0"
-                + " AND ecm:currentLifeCycleState <> 'deleted'"
+                + " AND ecm:isTrashed = 0"
                 + " ORDER BY ecm:uuid";
         IterableQueryResult it = session.queryAndFetch(query, NXQL.NXQL,
                 QueryFilter.EMPTY);
