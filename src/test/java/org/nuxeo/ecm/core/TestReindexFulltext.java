@@ -46,7 +46,7 @@ public class TestReindexFulltext {
     @Test
     public void testReindexFulltext() throws Exception {
         // create a live doc
-        DocumentModel file = new DocumentModelImpl("/", "file", "File");
+        DocumentModel file = session.createDocumentModel("/", "file", "File");
         file = session.createDocument(file);
 
         // create a version
@@ -56,13 +56,13 @@ public class TestReindexFulltext {
         session.createProxy(ver, session.getRootDocument().getRef());
 
         // create an unfiled doc
-        DocumentModel file2 = new DocumentModelImpl((String) null, "file2", "File");
+        DocumentModel file2 = session.createDocumentModel((String) null, "file2", "File");
         session.createDocument(file2);
 
         session.save();
 
         ReindexFulltextRoot reindex = new ReindexFulltextRoot();
-        reindex.coreSession = session;
+        reindex.session = session;
         String ok = reindex.reindexFulltext(0, 0);
         assertEquals("done: 3 total: 3 batch_errors: 0", ok);
     }
