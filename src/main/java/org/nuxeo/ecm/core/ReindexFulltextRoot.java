@@ -19,7 +19,6 @@
 package org.nuxeo.ecm.core;
 
 import java.io.Serializable;
-import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +34,6 @@ import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
 import org.nuxeo.ecm.core.api.NuxeoException;
-import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.repository.FulltextConfiguration;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.model.Repository;
@@ -85,12 +83,7 @@ public class ReindexFulltextRoot {
         Repository repository = repositoryService.getRepository(session.getRepositoryName());
         fulltextConfiguration = repository.getFulltextConfiguration();
 
-        Principal principal = session.getPrincipal();
-        if (!(principal instanceof NuxeoPrincipal)) {
-            return "unauthorized";
-        }
-        NuxeoPrincipal nuxeoPrincipal = (NuxeoPrincipal) principal;
-        if (!nuxeoPrincipal.isAdministrator()) {
+        if (!session.getPrincipal().isAdministrator()) {
             return "unauthorized";
         }
 
