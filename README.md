@@ -1,5 +1,8 @@
-# Nuxeo Reindex Fulltext
+# [DEPRECATED] Nuxeo Reindex Fulltext
 
+This project is deprecated, the Management API is now providing an endpoint to perform the binary fulltext extraction, visit [NXP-31276](https://jira.nuxeo.com/browse/NXP-31276) for more information.
+
+----
 This is a simple plugin used to launch a full reindexing of the fulltext
 of a Nuxeo repository.
 
